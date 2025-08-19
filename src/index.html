@@ -1,32 +1,236 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <link rel="stylesheet" href="styles.css" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus App</title>
-        <script type="module" src="/main.js" defer></script>
-    </head>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高级JavaScript计时器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        danger: '#EF4444',
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .timer-shadow {
+                box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.1), 0 8px 10px -6px rgba(59, 130, 246, 0.1);
+            }
+            .btn-hover {
+                @apply transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-light to-blue-50 min-h-screen flex flex-col items-center justify-center p-4 font-sans text-dark">
+    <div class="max-w-md w-full bg-white rounded-2xl p-8 timer-shadow">
+        <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-center mb-8 text-primary">
+            <i class="fa fa-clock-o mr-2"></i>计时器
+        </h1>
+        
+        <!-- 时间显示区域 -->
+        <div class="bg-gray-50 rounded-xl p-6 mb-8 text-center">
+            <div id="timer-display" class="text-[clamp(2rem,8vw,3.5rem)] font-mono font-bold text-dark">
+                00:00:00.00
+            </div>
+        </div>
+        
+        <!-- 控制按钮区域 -->
+        <div class="flex justify-center gap-4 mb-8 flex-wrap">
+            <button id="start-btn" class="bg-secondary text-white px-6 py-3 rounded-full btn-hover flex items-center">
+                <i class="fa fa-play mr-2"></i>开始
+            </button>
+            <button id="pause-btn" class="bg-primary text-white px-6 py-3 rounded-full btn-hover flex items-center hidden">
+                <i class="fa fa-pause mr-2"></i>暂停
+            </button>
+            <button id="reset-btn" class="bg-danger text-white px-6 py-3 rounded-full btn-hover flex items-center">
+                <i class="fa fa-refresh mr-2"></i>重置
+            </button>
+            <button id="lap-btn" class="bg-dark text-white px-6 py-3 rounded-full btn-hover flex items-center">
+                <i class="fa fa-flag mr-2"></i>记录
+            </button>
+        </div>
+        
+        <!-- 记录列表 -->
+        <div class="border-t border-gray-200 pt-4">
+            <h2 class="text-lg font-semibold mb-3 text-gray-600">
+                <i class="fa fa-history mr-2"></i>时间记录
+            </h2>
+            <div id="laps-container" class="max-h-40 overflow-y-auto space-y-2 text-sm">
+                <div class="text-gray-400 italic text-center py-4">暂无记录</div>
+            </div>
+        </div>
+    </div>
+    
+    <footer class="mt-8 text-center text-gray-500 text-sm">
+        高级JavaScript计时器 &copy; 2023
+    </footer>
 
-    <body>
-        <main class="container">
-            <h1>Welcome to PakePlus</h1>
-            <form class="row" id="greet-form">
-                <input id="inputValue" placeholder="Enter a something..." />
-            </form>
-            <div class="resultBox">
-                <span>result: </span>
-                <span id="result"></span>
-            </div>
-            <div class="invokeBox">
-                <button id="openUrl">open_url_browser</button>
-                <button id="openUrlNew">open_url_new</button>
-                <button id="runCommand">run_command</button>
-                <button id="downloadFile">download_file</button>
-                <button id="getExeDir">get_exe_dir</button>
-                <button id="getEnvVar">get_env_var</button>
-                <button id="findPort">find_port</button>
-            </div>
-        </main>
-    </body>
+    <script>
+        // 计时器状态变量
+        let timer;
+        let startTime = 0;
+        let elapsedTime = 0;
+        let isRunning = false;
+        let lapCount = 0;
+        
+        // DOM元素
+        const timerDisplay = document.getElementById('timer-display');
+        const startBtn = document.getElementById('start-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const lapBtn = document.getElementById('lap-btn');
+        const lapsContainer = document.getElementById('laps-container');
+        
+        // 格式化时间函数
+        function formatTime(timeInMs) {
+            const hours = Math.floor(timeInMs / 3600000);
+            const minutes = Math.floor((timeInMs % 3600000) / 60000);
+            const seconds = Math.floor((timeInMs % 60000) / 1000);
+            const milliseconds = Math.floor((timeInMs % 1000) / 10);
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+        }
+        
+        // 更新计时器显示
+        function updateTimer() {
+            const currentTime = Date.now();
+            elapsedTime = currentTime - startTime;
+            timerDisplay.textContent = formatTime(elapsedTime);
+        }
+        
+        // 开始计时器
+        function startTimer() {
+            if (!isRunning) {
+                startTime = Date.now() - elapsedTime;
+                timer = setInterval(updateTimer, 10);
+                isRunning = true;
+                
+                // 更新按钮状态
+                startBtn.classList.add('hidden');
+                pauseBtn.classList.remove('hidden');
+                
+                // 添加动画效果
+                timerDisplay.classList.add('scale-105', 'text-secondary');
+                setTimeout(() => {
+                    timerDisplay.classList.remove('scale-105');
+                }, 300);
+            }
+        }
+        
+        // 暂停计时器
+        function pauseTimer() {
+            if (isRunning) {
+                clearInterval(timer);
+                isRunning = false;
+                
+                // 更新按钮状态
+                pauseBtn.classList.add('hidden');
+                startBtn.classList.remove('hidden');
+                
+                // 添加动画效果
+                timerDisplay.classList.add('scale-105', 'text-primary');
+                setTimeout(() => {
+                    timerDisplay.classList.remove('scale-105');
+                }, 300);
+            }
+        }
+        
+        // 重置计时器
+        function resetTimer() {
+            clearInterval(timer);
+            isRunning = false;
+            elapsedTime = 0;
+            lapCount = 0;
+            timerDisplay.textContent = '00:00:00.00';
+            
+            // 更新按钮状态
+            pauseBtn.classList.add('hidden');
+            startBtn.classList.remove('hidden');
+            
+            // 清空记录
+            lapsContainer.innerHTML = '<div class="text-gray-400 italic text-center py-4">暂无记录</div>';
+            
+            // 添加动画效果
+            timerDisplay.classList.add('scale-105', 'text-dark');
+            setTimeout(() => {
+                timerDisplay.classList.remove('scale-105');
+            }, 300);
+        }
+        
+        // 记录当前时间
+        function recordLap() {
+            if (isRunning || elapsedTime > 0) {
+                lapCount++;
+                const lapTime = formatTime(elapsedTime);
+                
+                // 清空初始提示
+                if (lapsContainer.querySelector('.italic')) {
+                    lapsContainer.innerHTML = '';
+                }
+                
+                // 创建新记录元素
+                const lapElement = document.createElement('div');
+                lapElement.className = 'flex justify-between items-center p-2 border-b border-gray-100 last:border-0';
+                lapElement.innerHTML = `
+                    <span class="font-medium text-gray-600">记录 ${lapCount}</span>
+                    <span class="font-mono font-bold text-primary">${lapTime}</span>
+                `;
+                
+                // 添加到列表顶部
+                lapsContainer.insertBefore(lapElement, lapsContainer.firstChild);
+                
+                // 添加动画效果
+                lapElement.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => {
+                    lapElement.classList.remove('opacity-0', 'translate-y-2');
+                    lapElement.classList.add('transition-all', 'duration-300');
+                }, 10);
+            }
+        }
+        
+        // 事件监听
+        startBtn.addEventListener('click', startTimer);
+        pauseBtn.addEventListener('click', pauseTimer);
+        resetBtn.addEventListener('click', resetTimer);
+        lapBtn.addEventListener('click', recordLap);
+        
+        // 键盘快捷键支持
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case ' ': // 空格键
+                    e.preventDefault();
+                    isRunning ? pauseTimer() : startTimer();
+                    break;
+                case 'r': // R键重置
+                case 'R':
+                    resetTimer();
+                    break;
+                case 'l': // L键记录
+                case 'L':
+                    recordLap();
+                    break;
+            }
+        });
+    </script>
+</body>
 </html>
